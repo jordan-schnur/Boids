@@ -48,10 +48,13 @@
             <input min="0" max="0.01" step="0.001" value="0.005" type="range" class="form-range" id="cohesion">
 
             <label for="visual-range" class="form-label">Visual Range</label>
-            <input min="0" max="400" step="5" value="200" type="range" class="form-range" id="visual-range">
+            <input min="0" max="400" step="5" value="75" type="range" class="form-range" id="visual-range">
 
             <label for="separation-distance" class="form-label">Separation Distance</label>
-            <input min="8" max="20" step="1" value="12" type="range" class="form-range" id="separation-distance">
+            <input min="8" max="40" step="1" value="20" type="range" class="form-range" id="separation-distance">
+
+            <label for="max-force" class="form-label">Max Force</label>
+            <input min="0" max="0.2" step="0.01" value="0.05" type="range" class="form-range" id="max-force">
         </div>
         <div id="pixi-container" class="col-md-8 align-items-center"></div>
     </div>
@@ -61,8 +64,8 @@
 		return Math.floor(Math.random() * (max - min)) + min;
 	}
 
-	const windowSizeWidth = 640;
-	const windowSizeHeight = 360;
+	const windowSizeWidth = 960;
+	const windowSizeHeight = 800;
 
 	class Boid {
 
@@ -83,12 +86,12 @@
 			this.debug = false;
 			this.width = width;
 			this.height = height;
-			this.vX = getRndInteger(-6, 6);
-			this.vY = getRndInteger(-6, 6);
+			this.vX = getRndInteger(-5, 5);
+			this.vY = getRndInteger(-5, 5);
 			this.container = new PIXI.Container();
 			this.id = Boid.idInc;
 			Boid.idInc++;
-			this.angle = Math.atan(this.vY / this.vX);
+			this.angle = Math.atan2(this.vY, this.vX);
 			this.debug = debug;
 			this.speed = 0;
 
@@ -106,7 +109,7 @@
 				align: 'center'
 			});
 
-			this.container.addChild(this.sprite);
+			// this.container.addChild(this.sprite);
 
 			if ( this.debug ) {
 				this.text = new PIXI.Text("#" + this.id + " \na(" + this.vX + ", " + this.vY + ") \ndeg " + (this.angle * (180 / Math.PI)),
@@ -135,8 +138,10 @@
 
 			this.angle = Math.atan2(this.vY, this.vX);
 
-			this.x += this.vX;
-			this.y += this.vY;
+			this.vX *= delta;
+			this.vY *= delta;
+			this.x += this.vX * delta;
+			this.y += this.vY * delta;
 
 			// if ( this.x > windowSizeWidth ) {
 			// 	this.x = 0;
@@ -175,15 +180,18 @@
 		}
 	}
 
-	let numOfBoids = 20;
+	let numOfBoids = 200;
 	let boids = [];
 	const font = new FontFaceObserver('Roboto Mono', {});
-	let visualRange = 150;
-	let cohesion = 0.005;
-	let separationDistance = 12;
+	let visualRange = 75;
+	let cohesion = 0.0005;
+	let separationDistance = 20;
 	let separation = 0.05;
 	let alignment = 0.05;
 	let app = null;
+	let maxForce = 0.2;
+	const speedLimit = 3;
+	const speedMin = 2;
 
 	function addXBoids(X) {
 		for ( let i = 0; i < X; i++ ) {
@@ -194,7 +202,7 @@
 				8,
 				8);
 
-			app.stage.addChild(boid.container);
+			app.stage.addChild(boid.sprite);
 
 			boids.push(boid);
 		}
@@ -232,7 +240,7 @@
 					}
 				}
 
-				if ( boidsInRange ) {
+				if ( boidsInRange !== 0 ) {
 					centerMassX = centerMassX / boidsInRange;
 					centerMassY = centerMassY / boidsInRange;
 
@@ -245,7 +253,7 @@
 				let moveY = 0;
 
 				for ( let otherBoid of boids ) {
-					if ( otherBoid !== boid && boid.distanceFrom(otherBoid) < separationDistance ) {
+					if ( otherBoid.id !== boid.id && boid.distanceFrom(otherBoid) < separationDistance ) {
 						moveX += boid.x - otherBoid.x;
 						moveY += boid.y - otherBoid.y;
 					}
@@ -259,34 +267,36 @@
 				let avgVY = 0;
 				boidsInRange = 0;
 				for ( let otherBoid of boids ) {
-					if ( boid.distanceFrom(otherBoid) < visualRange ) {
+					if ( otherBoid.id !== boid.id && boid.distanceFrom(otherBoid) < visualRange ) {
 						avgVX += otherBoid.vX;
 						avgVY += otherBoid.vY;
 						boidsInRange++;
 					}
 				}
 
-				if ( boidsInRange ) {
+				if ( boidsInRange !== 0 ) {
 					avgVX = avgVX / boidsInRange;
 					avgVY = avgVY / boidsInRange;
+
+					boid.vX += (avgVX - boid.vX) * alignment;
+					boid.vY += (avgVX - boid.vY) * alignment;
 				}
 
-				boid.vX += (avgVX - boid.vX) * alignment;
-				boid.vY += (avgVX - boid.vY) * alignment;
 
 				// SPEED LIMIT
 				boid.speed = Math.sqrt(Math.pow(boid.vY, 2) + Math.pow(boid.vX, 2));
 
-				const speedLimit = 12.5;
-
 				if ( boid.speed > speedLimit ) {
 					boid.vX = (boid.vX / boid.speed) * speedLimit;
 					boid.vY = (boid.vY / boid.speed) * speedLimit;
+				} else {
+					boid.vX = (boid.vX / boid.speed) * speedMin;
+					boid.vY = (boid.vY / boid.speed) * speedMin;
 				}
 
 				// AVOID EDGE
-				const margin = 100;
-				const turnFactor = 1;
+				const margin = 200;
+				const turnFactor = maxForce;
 
 				if ( boid.x < margin ) {
 					boid.vX += turnFactor;
@@ -330,6 +340,9 @@
 					break;
 				case "separation-distance":
 					separationDistance = val;
+					break;
+				case "max-force":
+					maxForce = val;
 					break;
 				case "num-boids":
 					let lastBoids = boids.length;
