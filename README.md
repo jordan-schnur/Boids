@@ -5,4 +5,4 @@ An implementation of boids for my website. It will be converted to a Svelte comp
 ### Dependencies
 
 * https://pixijs.com/
-* 
+* https://fontfaceobserver.com/
